@@ -1,0 +1,48 @@
+---
+title: "Classification"
+author: "Samuel Coavoux"
+date: "28/05/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tint)
+library(knitr)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'),
+                      echo = FALSE, message = FALSE, error = FALSE, warning = FALSE)
+options(htmltools.dir.version = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(quanteda)
+library(here)
+library(janitor)
+library(lubridate)
+library(conflicted)
+library(topicmodels)
+library(wordcloud)
+library(rainette)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("here", "here")
+source(here("02_scripts", "lda_reports.R"))
+```
+
+```{r}
+load(here("01_data", "Corpus_20210316_motscles_clean.RData"))
+#load(here("04_objects", "lda.RData"))
+```
+
+```{r}
+do_seg <- split_segments(do_cp)
+```
+
+```{r}
+do_rei <- rainette(dfm(do_seg))
+```
+
+```{r}
+rainette_explor(do_rei, do_seg)
+```
+

@@ -1,0 +1,131 @@
+---
+title: "Interprétation du topic model"
+subtitle: ""
+author: "Samuel Coavoux"
+date: "`r Sys.Date()`"
+output: tint::tintHtml
+---
+
+```{r setup, include=FALSE}
+library(tint)
+library(knitr)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'),
+                      echo = FALSE, message = FALSE, error = FALSE, warning = FALSE)
+options(htmltools.dir.version = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(quanteda)
+library(here)
+library(janitor)
+library(lubridate)
+library(conflicted)
+library(topicmodels)
+library(wordcloud)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("here", "here")
+source(here("02_scripts", "lda_reports.R"))
+```
+
+```{r}
+load(here("01_data", "Corpus_20210316_motscles_clean.RData"))
+load(here("04_objects", "lda.RData"))
+```
+
+# Topic models
+
+```{r}
+d$maj_tp <- topics(do_lda)
+d <- posterior(do_lda)$topics %>% 
+  as_tibble() %>% 
+  rename_with(~ paste0("t", str_pad(.x, width = 2, pad = "0"))) %>% 
+  bind_cols(d, .)
+```
+
+```{r, results="asis"}
+do_dft <- dfm_trim(do_df, min_termfreq = 5)
+
+tr <- term_relevance(do_lda, do_dft, lambda = 0.6, nb = 100)
+zt <- select(d, publication, titre, date, matches("t\\d\\d")) %>% 
+  pivot_longer(t01:t30) %>% 
+  relocate(value)
+
+for(i in 1:30L){
+  tno <- paste0("t", str_pad(string = i, width = 2, pad = "0"))
+  x <- filter(tr, topic == i)
+  cat("**Thème", i, "** :", #as.character(filter(topics, topic == tno)$interpretation),
+      "\n\n",
+      "*Termes les plus fortement associés au thème ", i, "* : ",
+      paste(x$term, collapse = ", "),
+      "\n\n")
+
+  wordcloud(words = x$term, freq = x$beta*100000)
+  title(main = paste("Thème", i)) #"-", as.character(filter(topics, topic == tno)$interpretation)))
+  cat("\n\n")
+  
+  filter(zt, name == tno) %>%
+    select(-name) %>% 
+    arrange(desc(value)) %>% 
+    slice(1:10) %>% 
+    kable(caption = paste("Documents les plus fortements associés au thème", i)) %>% 
+    cat(sep="\n")
+  cat("\n\n")
+}
+```
+
+```{r, fig.cap = "Variabilité des topics majoritaires par mois"}
+count(d, dateym, maj_tp) %>% 
+  ggplot(aes(dateym, n)) +
+    geom_point() +
+    geom_line() +
+    facet_wrap(~maj_tp, scales = "free")
+```
+
+<!-- -->
+```{r}
+select(d, t01:t30, dateym) %>% 
+  pivot_longer(-dateym) %>% 
+  group_by(dateym) %>% 
+  mutate(nb = n()/30) %>% 
+  group_by(dateym, name, nb) %>% 
+  summarise(m = mean(value)) %>% 
+  filter(nb > 10) %>% 
+  ggplot(aes(dateym, m)) +
+    geom_point(stat = "identity") +
+    facet_wrap(~name, scales = "free_x", ncol = 7) +
+    coord_flip()
+```
+
+```{r, fig.cap="Valeur moyenne des topics par publications (plus de 10 articles)"}
+select(d, t01:t30, publication) %>% 
+  pivot_longer(-publication) %>% 
+  group_by(publication) %>% 
+  mutate(nb = n()/30) %>% 
+  group_by(publication, name, nb) %>% 
+  summarise(m = mean(value)) %>% 
+  filter(nb > 10) %>% 
+  ggplot(aes(publication, m)) +
+    geom_point(stat = "identity") +
+    facet_wrap(~name, scales = "free_x", ncol = 7) +
+    coord_flip()
+```
+
+```{r LDAVis, eval=FALSE}
+topicmodels2LDAvis <- function(x, ...){
+  post <- topicmodels::posterior(x)
+  if (ncol(post[["topics"]]) < 3) stop("The model must contain > 2 topics")
+  mat <- x@wordassignments
+  LDAvis::createJSON(
+    phi = post[["terms"]], 
+    theta = post[["topics"]],
+    vocab = colnames(post[["terms"]]),
+    doc.length = slam::row_sums(mat, na.rm = TRUE),
+    term.frequency = slam::col_sums(mat, na.rm = TRUE)
+  )
+}
+library(LDAvis)
+serVis(topicmodels2LDAvis(do_lda))
+
+```

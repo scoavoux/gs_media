@@ -1,0 +1,146 @@
+---
+title: "Exploration du corpus Greenstream"
+subtitle: ""
+author: "Samuel Coavoux"
+date: "`r Sys.Date()`"
+output: tint::tintHtml
+---
+
+```{r setup, include=FALSE}
+library(tint)
+library(knitr)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'),
+                      echo = FALSE, message = FALSE, error = FALSE, warning = FALSE)
+options(htmltools.dir.version = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(quanteda)
+library(here)
+library(janitor)
+library(lubridate)
+library(conflicted)
+library(topicmodels)
+library(wordcloud)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("here", "here")
+source(here("02_scripts", "lda_reports.R"))
+```
+
+```{r}
+load(here("01_data", "Corpus_20210316_motscles_clean.RData"))
+```
+
+# Données
+
+Les données ont été collectées le 16/03/2021 via la plateforme Europresse.
+
+La requête employé est la suivante: `TEXT= "sobriété numérique" | "impact environnemental du numérique" | "empreinte environnementale du numérique" | "numérique soutenable"`. Les critères de la recherche avancée ont permis en outre de limiter la recherche aux sources de type "journaux" et de langue française. La recherche a été effectuée sur l'ensemble des archives, sans limite de temps.
+
+En outre, avec les mêmes critères de recherche, nous avons rassemblé plusieurs corpus sur chacun des rapports:
+
++ ADEME & "Panorama sur la notion de sobriété"
++ iNum* & "Impacts environnementaux du numérique en France"
+
++ ADEME & "face cachée du numérique"
++ ARCEP & "numérique soutenable"
++ Sénat & "empreinte environnementale du numérique"
++ GreenIT & "Empreinte environnementale du numérique"
++ Shift & "Déployer la sobriété numérique"
++ Shift & "insoutenable usage de la vidéo en ligne"
++ Shift & "Pour une sobriété numérique"
+
+# Chronologie et publications
+
+Les articles sont très récents dans l'ensemble, bien que les premières datent de `r min(year(d$date))`. Le graphique ci-dessous commence en 2018.
+
+```{r timeline, fig.cap="Chronologie des articles"}
+mutate(d, ye = year(date), mo = month(date)) %>% 
+  count(ye, mo) %>% 
+  mutate(date = ym(paste0(ye, mo))) %>% 
+  ggplot(aes(date, n)) +
+    geom_point() +
+    geom_line() +
+    scale_x_date(limits = c(ymd(20180101, today())))
+```
+
+Les principales publications...
+
+```{r publication_distribution}
+count(d, publication) %>% 
+  arrange(desc(n)) %>% 
+  filter(n > 7) %>% 
+  kable(caption = "Publications avec plus de 7 articles")
+```
+
+# Citations des différents organismes
+
+```{r}
+dfm_select(do_df, c("green_it", "arcep", "ademe", "shift_project", "sénat")) %>% 
+  textstat_frequency() %>% 
+  kable(caption = "Citations des noms des organismes promoteurs de rapports dans les documents")
+```
+
+```{r}
+dfm_select(ti_df, c("green_it", "arcep", "ademe", "shift_project", "sénat")) %>% 
+  textstat_frequency() %>% 
+  kable(caption = "Citations des noms des organismes promoteurs de rapports dans les titres de documents")
+```
+
+# Titres
+
+On regarde le corpus des titres.
+
+Le réseau des termes.
+
+```{r}
+textplot_network(ti_fcm, omit_isolated = TRUE)
+```
+
+```{r}
+textstat_frequency(ti_df) %>% 
+  slice(1:20) %>% 
+  kable(caption = "20 termes les plus présents dans les titres")
+```
+
+```{r}
+tokens(ti_cp,
+       remove_punct = TRUE, 
+       remove_numbers = TRUE, 
+       remove_separators = TRUE) %>% 
+  tokens_remove(stw, padding = TRUE) %>% 
+  textstat_collocations() %>% 
+  arrange(desc(count)) %>% 
+  slice(1:20) %>% 
+  kable(caption = "20 2-gram les plus présents dans les titres")
+```
+
+# Documents
+
+```{r}
+textstat_frequency(do_df) %>% 
+  slice(1:100) %>% 
+  kable(caption = "100 termes les plus présents dans les documents")
+
+```
+
+```{r}
+tokens(do_cp,
+       remove_punct = TRUE, 
+       remove_numbers = TRUE, 
+       remove_separators = TRUE) %>% 
+  tokens_remove(stw, padding = TRUE) %>% 
+  textstat_collocations() %>% 
+  arrange(desc(count)) %>% 
+  slice(1:20) %>% 
+  kable(caption = "bi-gram les plus présents dans les documents")
+```
+
+
+```{r}
+textplot_network(do_fcm, omit_isolated = TRUE)
+```
+
+
